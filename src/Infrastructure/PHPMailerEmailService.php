@@ -7,6 +7,8 @@ namespace Aegis\Infrastructure;
 use Aegis\Domain\EmailMessage;
 use Aegis\Domain\EmailResult;
 use Aegis\Domain\EmailServiceInterface;
+use Aegis\Domain\DeliveryTracker;
+use Aegis\Domain\WebhookNotifier;
 use HTMLPurifier;
 use PHPMailer\PHPMailer\PHPMailer;
 use Psr\Log\LoggerInterface;
@@ -16,7 +18,9 @@ final class PHPMailerEmailService implements EmailServiceInterface
     public function __construct(
         private readonly PHPMailer $mailer,
         private readonly LoggerInterface $logger,
-        private readonly HTMLPurifier $htmlPurifier
+        private readonly HTMLPurifier $htmlPurifier,
+        private readonly DeliveryTracker $deliveryTracker,
+        private readonly WebhookNotifier $webhookNotifier
     ) {}
 
     public function send(EmailMessage $message): EmailResult
@@ -48,6 +52,9 @@ final class PHPMailerEmailService implements EmailServiceInterface
 
             $this->logger->info('Email sent successfully', $result->toArray());
 
+            // Notify success via webhook
+            $this->webhookNotifier->notifySuccess($message->getMessageId());
+
             return $result;
         } catch (\Exception $e) {
             $this->logger->error('Email sending failed', [
@@ -74,6 +81,10 @@ final class PHPMailerEmailService implements EmailServiceInterface
                     'secure' => $this->mailer->SMTPSecure
                 ]
             ]);
+
+            // Record failure and notify via webhook
+            $this->deliveryTracker->recordFailure($message->getMessageId(), $e->getMessage(), 1);
+            $this->webhookNotifier->notifyFailure($message->getMessageId(), $e->getMessage(), 1);
 
             return new EmailResult(false, null, $e->getMessage());
         }

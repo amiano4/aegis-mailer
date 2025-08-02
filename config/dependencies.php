@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Aegis\Application\SendEmailCommandHandler;
 use Aegis\Domain\EmailServiceInterface;
+use Aegis\Domain\DeliveryTracker;
+use Aegis\Domain\WebhookNotifier;
 use Aegis\Infrastructure\PHPMailerEmailService;
 use DI\ContainerBuilder;
 use Enqueue\Fs\FsConnectionFactory;
@@ -147,11 +149,21 @@ return function (ContainerBuilder $containerBuilder) {
             return new HTMLPurifier($config);
         },
 
+        DeliveryTracker::class => function (ContainerInterface $c) {
+            return new DeliveryTracker($c->get(LoggerInterface::class));
+        },
+
+        WebhookNotifier::class => function (ContainerInterface $c) {
+            return new WebhookNotifier($c->get(LoggerInterface::class));
+        },
+
         EmailServiceInterface::class => function (ContainerInterface $c) {
             return new PHPMailerEmailService(
                 $c->get(PHPMailer::class),
                 $c->get(LoggerInterface::class),
-                $c->get(HTMLPurifier::class)
+                $c->get(HTMLPurifier::class),
+                $c->get(DeliveryTracker::class),
+                $c->get(WebhookNotifier::class)
             );
         },
 

@@ -33,9 +33,7 @@ $container = $containerBuilder->build();
 AppFactory::setContainer($container);
 $app = AppFactory::create();
 
-// Add Middleware
-$app->add(new ApiKeyMiddleware($_ENV['API_KEY'] ?? ''));
-$app->add(RateLimitingMiddleware::class);
+// Add global middleware (but not for health/status endpoints)
 $app->addBodyParsingMiddleware(); // Add JSON body parsing
 $app->addRoutingMiddleware();
 
@@ -44,7 +42,17 @@ $displayErrorDetails = ($_ENV['APP_DEBUG'] ?? 'false') === 'true';
 $app->addErrorMiddleware($displayErrorDetails, true, true);
 
 // Define App Routes
-$app->post('/send', SendEmailAction::class);
+
+// Health and status endpoints (no auth required)
+$app->get('/health', \Aegis\Application\HealthCheckAction::class);
+$app->get('/status', \Aegis\Application\StatusAction::class);
+$app->get('/send/{messageId}/status', \Aegis\Application\MessageStatusAction::class);
+
+// Protected routes with authentication and rate limiting
+$app->group('', function ($group) {
+    $group->post('/send', SendEmailAction::class);
+})->add(RateLimitingMiddleware::class)
+  ->add(new ApiKeyMiddleware($_ENV['API_KEY'] ?? ''));
 
 // Run the app
 $app->run();

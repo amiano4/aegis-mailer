@@ -1,10 +1,33 @@
 {
-    "autoload": {
-        "psr-4": {
-            "Aegis\\": "src/"
+    "name": "aegis/mailer",
+    "description": "A secure, asynchronous PHP email microservice with queue management and production-ready daemon workers",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "amiano4",
+            "email": "almariomiano@gmail.com",
+            "role": "Full Stack Developer"
         }
+    ],
+    "keywords": [
+        "email",
+        "microservice",
+        "async",
+        "queue",
+        "smtp",
+        "api",
+        "security",
+        "ddd",
+        "cqrs"
+    ],
+    "homepage": "https://github.com/amiano4/aegis-mailer",
+    "support": {
+        "issues": "https://github.com/amiano4/aegis-mailer/issues",
+        "source": "https://github.com/amiano4/aegis-mailer"
     },
     "require": {
+        "php": ">=8.1",
         "slim/slim": "^4.14",
         "slim/psr7": "^1.7",
         "php-di/php-di": "^7.0",
@@ -17,5 +40,23 @@
         "phpmailer/phpmailer": "^6.10",
         "symfony/rate-limiter": "^7.3",
         "symfony/cache": "^7.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aegis\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/queue"
+    ],
+    "scripts": {
+        "start": "php scripts/start-server.php",
+        "queue": "php bin/queue",
+        "worker": "php bin/worker"
+    },
+    "scripts-descriptions": {
+        "start": "Start development server on available port (8000+)",
+        "queue": "Queue management utility",
+        "worker": "Start email worker process"
     }
 }

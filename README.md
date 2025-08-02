@@ -28,47 +28,66 @@ Aegis Mailer is an enterprise-grade email microservice built on modern PHP princ
 
 ## API Reference
 
-### `POST /send`
+**📖 [Complete API Documentation](./API_DOCUMENTATION.md)** - Comprehensive integration guide with examples, use cases, and production deployment.
 
-Queues an email for sending.
+### Quick API Overview
 
-**Headers**
+#### Core Endpoints
 
-- `Content-Type: application/json`
-- `X-Api-Key: your-secret-api-key`
+| Method | Endpoint | Auth Required | Description |
+|--------|----------|---------------|-------------|
+| `POST` | `/send` | ✅ | Queue email for delivery |
+| `GET` | `/send/{id}/status` | ❌ | Check delivery status |
+| `GET` | `/health` | ❌ | Health check for monitoring |
+| `GET` | `/status` | ❌ | System status and metrics |
 
-**Body**
+#### Basic Usage
 
+**Send Email**
+```bash
+curl -X POST http://localhost:8000/send \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: your-api-key" \
+  -d '{
+    "to": "user@example.com",
+    "subject": "Hello",
+    "body": "<h1>Welcome!</h1>",
+    "isHtml": true
+  }'
+```
+
+**Check Status**
+```bash
+curl "http://localhost:8000/send/msg_abc123/status?date=2024-08-02"
+```
+
+#### Webhook Notifications
+
+Configure optional real-time delivery notifications:
+
+```env
+WEBHOOK_URL=https://your-app.com/api/webhooks
+WEBHOOK_SECRET=shared-secret-key
+```
+
+**Webhook payload:**
 ```json
 {
-  "to": "recipient@example.com",
-  "subject": "Hello from Aegis Mailer",
-  "body": "<h1>Hello!</h1><p>This is a test email.</p>",
-  "isHtml": true,
-  "toName": "Test Recipient",
-  "cc": [{ "email": "cc@example.com", "name": "CC Recipient" }],
-  "bcc": [{ "email": "bcc@example.com" }],
-  "replyTo": "support@example.com",
-  "attachments": [
-    {
-      "name": "invoice.pdf",
-      "content": "(base64 encoded content)"
-    }
-  ]
+  "message_id": "msg_abc123",
+  "status": "sent|failed", 
+  "timestamp": "2024-08-02T19:30:00+00:00"
 }
 ```
 
-**Success Response (202 Accepted)**
+**Security:** All webhooks include `X-Aegis-Signature` header with SHA-256 HMAC for verification.
 
-```json
-{
-  "success": true,
-  "message": "Email queued successfully",
-  "message_id": "(a unique message ID)"
-}
-```
+---
 
-## Getting Started with Docker
+**For detailed integration examples, client libraries, production deployment, and advanced use cases, see the [Complete API Documentation](./API_DOCUMENTATION.md).**
+
+## Getting Started
+
+### Quick Local Setup
 
 1.  **Clone the repository:**
 
@@ -77,7 +96,13 @@ Queues an email for sending.
     cd aegis-mailer
     ```
 
-2.  **Create your environment file:**
+2.  **Install dependencies:**
+
+    ```bash
+    composer install
+    ```
+
+3.  **Create your environment file:**
 
     ```bash
     cp .env.example .env
@@ -85,18 +110,39 @@ Queues an email for sending.
 
     _Edit `.env` and set your `API_KEY` and SMTP credentials._
 
-3.  **Build and run the containers:**
+4.  **Start the development server:**
+
+    ```bash
+    composer start
+    ```
+
+5.  **Start the worker (in another terminal):**
+
+    ```bash
+    composer queue start --daemon
+    ```
+
+6.  **The service is now available:**
+
+    - **API:** Check console output for auto-detected port (usually `http://localhost:8000`)
+    - **Queue Management:** `composer queue status`
+
+### Docker Setup
+
+1.  **Follow steps 1-3 above, then:**
+
+2.  **Build and run the containers:**
 
     ```bash
     docker-compose up --build -d
     ```
 
-4.  **The service is now available:**
+3.  **The service is now available:**
 
     - **API:** `http://localhost:8080`
     - **Queue (Redis):** `localhost:6379`
 
-5.  **Check the logs:**
+4.  **Check the logs:**
     ```bash
     docker-compose logs -f app
     docker-compose logs -f worker
@@ -175,14 +221,23 @@ tail -f var/logs/worker.log
 
 ### Testing the API
 
-Test the email API with a simple curl command:
+Test the email API and monitoring endpoints:
 
 ```bash
 # Start the development server
-php -S localhost:8080 -t public/
+composer start
+
+# Test health check (no auth required)
+curl http://localhost:8000/health
+
+# Test status endpoint (no auth required)
+curl http://localhost:8000/status
+
+# Test message status (replace message ID and date)
+curl "http://localhost:8000/send/msg_abc123/status?date=2024-08-02"
 
 # Test email sending (replace YOUR_API_KEY with your actual key)
-curl -X POST http://localhost:8080/send \
+curl -X POST http://localhost:8000/send \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: YOUR_API_KEY" \
   -d '{
@@ -192,11 +247,60 @@ curl -X POST http://localhost:8080/send \
     "isHtml": true
   }'
 
-# Expected response:
-# {"success":true,"message":"Email queued successfully","message_id":"..."}
+# Expected responses:
+# Health: {"status":"healthy",...}
+# Status: {"service":"Aegis Mailer",...}
+# Message Status: {"status":"sent","message":"Email delivered successfully",...}
+# Send: {"success":true,"message":"Email queued successfully","message_id":"..."}
 ```
 
 ### Local Development
+
+#### Quick Start
+
+```bash
+# Install dependencies
+composer install
+
+# Start development server (auto-detects available port from 8000+)
+composer start
+
+# In another terminal, start the worker
+composer queue start
+```
+
+#### Composer Scripts
+
+Aegis Mailer includes convenient composer scripts for development:
+
+```bash
+# Start development server with smart port detection
+composer start
+
+# Start server on specific port
+composer start -- --port=8080
+
+# Queue management utility
+composer queue status
+composer queue start --daemon
+composer queue stop
+composer queue clear
+
+# Start worker process
+composer worker
+```
+
+#### Manual Development Server
+
+If you prefer manual control:
+
+```bash
+# Start PHP development server on specific port
+php -S localhost:8080 -t public/
+
+# Or use the smart start script directly
+php scripts/start-server.php --port=8080
+```
 
 #### Manual Worker
 
@@ -204,19 +308,4 @@ To run the queue worker manually without the management utility:
 
 ```bash
 php bin/worker
-```
-
-#### Development Server
-
-Start the development server:
-
-```bash
-# Install dependencies
-composer install
-
-# Start PHP development server
-php -S localhost:8080 -t public/
-
-# In another terminal, start the worker
-php bin/queue start
 ```
