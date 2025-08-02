@@ -1,0 +1,103 @@
+# Environment Configuration (NEVER commit sensitive data)
+.env
+.env.local
+.env.production
+.env.staging
+.env.testing
+
+# Composer Dependencies
+/vendor/
+composer.lock
+
+# Logs and Runtime Files
+/logs/
+*.log
+/storage/
+/cache/
+
+# IDE and Editor Files
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# PHP-specific
+*.cache
+.phpunit.result.cache
+/coverage/
+/build/
+
+# Temporary Files
+/tmp/
+/temp/
+*.tmp
+*.temp
+
+# Queue and Session Files
+/queue/
+/sessions/
+
+# Configuration Overrides (keep templates, ignore actual configs)
+config/*.local.php
+config/local.php
+
+# Email Attachments and Uploads
+/attachments/
+/uploads/
+/files/
+
+# Backup Files
+*.bak
+*.backup
+*.old
+
+# System Files
+.htaccess.bak
+nginx.conf.bak
+
+# Testing Files (keep test templates, ignore actual test runs)
+test-*.php
+!test-simple.php
+!test-generic.php
+!test-improved.php
+
+# Documentation Build Files
+/docs/build/
+/docs/_build/
+
+# Package Manager Files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Runtime and Process Files
+*.pid
+*.sock
+
+# SSL Certificates and Keys (NEVER commit)
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+
+# Database Files (if using local storage)
+*.db
+*.sqlite
+*.sqlite3
+
+# Error and Debug Files
+error.log
+debug.log
+php_errors.log
+
+# Performance and Profiling
+/profiler/
+*.prof
+
+# Security Files
+.htpasswd
+auth.json

@@ -1,0 +1,111 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        php-version: [8.1, 8.2, 8.3]
+
+    services:
+      mailhog:
+        image: mailhog/mailhog
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, dom, filter, gd, iconv, json, mbstring, openssl
+        coverage: xdebug
+
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-${{ matrix.php-version }}-
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-interaction
+
+    - name: Create test environment file
+      run: |
+        cp .env.example .env.testing
+        echo "APP_ENV=testing" >> .env.testing
+        echo "LOGGING_ENABLED=false" >> .env.testing
+        echo "SMTP_HOST=localhost" >> .env.testing
+        echo "SMTP_PORT=1025" >> .env.testing
+        echo "SMTP_AUTH=false" >> .env.testing
+        echo "SMTP_ENCRYPTION=" >> .env.testing
+
+    - name: Run code style checks
+      run: composer cs-check
+
+    - name: Run static analysis
+      run: composer stan
+
+    - name: Run unit tests
+      run: composer test -- --testsuite="Unit Tests"
+
+    - name: Run integration tests
+      run: composer test -- --testsuite="Integration Tests"
+
+    - name: Generate coverage report
+      run: composer test-coverage
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/clover.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: 8.2
+        extensions: mbstring, xml, ctype, iconv, intl
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-interaction
+
+    - name: Run quality checks
+      run: composer quality
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: 8.2
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-interaction
+
+    - name: Run security audit
+      run: composer audit

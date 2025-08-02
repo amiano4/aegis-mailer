@@ -1,0 +1,62 @@
+{
+    "name": "phpmail-service/core",
+    "description": "PHPMail Server - Production-ready PHP email server that accepts POST requests for reliable email delivery",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["php", "email", "smtp", "server", "api", "mailer", "phpmail", "post", "rest"],
+    "authors": [
+        {
+            "name": "Almario Dev",
+            "email": "almario.dev@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "phpmailer/phpmailer": "^6.8",
+        "vlucas/phpdotenv": "^5.5",
+        "monolog/monolog": "^3.0",
+        "symfony/rate-limiter": "^6.0",
+        "symfony/cache": "^6.0",
+        "twig/twig": "^3.0",
+        "symfony/validator": "^6.0",
+        "ramsey/uuid": "^4.0",
+        "psr/log": "^3.0",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "phpstan/phpstan": "^1.10",
+        "squizlabs/php_codesniffer": "^3.7",
+        "friendsofphp/php-cs-fixer": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PHPMailService\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PHPMailService\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "start": "php -S localhost:8000 public/index.php",
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage",
+        "cs-fix": "php-cs-fixer fix",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "stan": "phpstan analyse",
+        "quality": [
+            "@cs-check",
+            "@stan",
+            "@test"
+        ]
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
