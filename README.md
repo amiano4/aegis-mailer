@@ -104,14 +104,119 @@ Queues an email for sending.
 
 ## Development
 
-### Running Tests
+### Queue Management
 
-(Test suite to be implemented)
+Aegis Mailer includes a comprehensive queue management utility for monitoring and controlling the email processing system:
 
-### Local Worker
+```bash
+# Show queue status and worker information
+php bin/queue status
 
-To run the queue worker locally without Docker:
+# Clear all pending messages from queue
+php bin/queue clear
+
+# Process all queued messages once (no continuous worker)
+php bin/queue process
+
+# Start worker in foreground mode
+php bin/queue start
+
+# Start worker as background daemon
+php bin/queue start --daemon
+
+# Stop running worker process
+php bin/queue stop
+
+# Restart worker (foreground mode)
+php bin/queue restart
+
+# Restart worker as background daemon
+php bin/queue restart --daemon
+
+# View recent application logs (default: 50 lines)
+php bin/queue logs
+
+# View specific number of log lines
+php bin/queue logs 100
+
+# Show help and available commands
+php bin/queue help
+```
+
+#### Queue Status Example
+
+```bash
+$ php bin/queue status
+
+=== Queue Status ===
+
+Queue Directory: /var/queue
+Queue Files: 3
+Lock Files: 1
+Total Size: 2.1 KB
+⚠ There are 3 pending messages in the queue
+✓ Worker is running (PID: 12345)
+```
+
+#### Production Daemon Mode
+
+For production environments, use daemon mode with proper logging:
+
+```bash
+# Start worker as daemon
+php bin/queue start --daemon
+
+# Check logs
+php bin/queue logs 50
+
+# Monitor in real-time
+tail -f var/logs/worker.log
+```
+
+### Testing the API
+
+Test the email API with a simple curl command:
+
+```bash
+# Start the development server
+php -S localhost:8080 -t public/
+
+# Test email sending (replace YOUR_API_KEY with your actual key)
+curl -X POST http://localhost:8080/send \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -d '{
+    "to": "test@example.com",
+    "subject": "Test Email",
+    "body": "<h1>Hello!</h1><p>This is a test email from Aegis Mailer.</p>",
+    "isHtml": true
+  }'
+
+# Expected response:
+# {"success":true,"message":"Email queued successfully","message_id":"..."}
+```
+
+### Local Development
+
+#### Manual Worker
+
+To run the queue worker manually without the management utility:
 
 ```bash
 php bin/worker
+```
+
+#### Development Server
+
+Start the development server:
+
+```bash
+# Install dependencies
+composer install
+
+# Start PHP development server
+php -S localhost:8080 -t public/
+
+# In another terminal, start the worker
+php bin/queue start
 ```

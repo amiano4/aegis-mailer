@@ -71,19 +71,23 @@ function getQueueStats(): array
     $queueDir = __DIR__ . '/../var/queue';
     $lockFiles = glob($queueDir . '/*.lock');
     $queueFiles = glob($queueDir . '/send-email*');
-    
-    // Filter out lock files from queue files
-    $queueFiles = array_filter($queueFiles, fn($file) => !str_ends_with($file, '.lock'));
-    
+
+    // Filter out lock files and empty files from queue files
+    $validQueueFiles = [];
     $totalSize = 0;
+    
     foreach ($queueFiles as $file) {
-        if (file_exists($file)) {
-            $totalSize += filesize($file);
+        if (!str_ends_with($file, '.lock') && file_exists($file)) {
+            $fileSize = filesize($file);
+            if ($fileSize > 0) {
+                $validQueueFiles[] = $file;
+                $totalSize += $fileSize;
+            }
         }
     }
-    
+
     return [
-        'queue_files' => count($queueFiles),
+        'queue_files' => count($validQueueFiles),
         'lock_files' => count($lockFiles),
         'total_size' => $totalSize,
         'queue_dir' => $queueDir
@@ -93,15 +97,15 @@ function getQueueStats(): array
 function clearQueue(): void
 {
     printHeader('Clearing Queue');
-    
+
     $queueDir = __DIR__ . '/../var/queue';
     $files = glob($queueDir . '/*');
-    
+
     if (empty($files)) {
         printInfo('Queue is already empty');
         return;
     }
-    
+
     $deleted = 0;
     foreach ($files as $file) {
         if (is_file($file)) {
@@ -112,31 +116,35 @@ function clearQueue(): void
             }
         }
     }
-    
+
     printSuccess("Cleared $deleted files from queue");
 }
 
 function statusQueue(): void
 {
     printHeader('Queue Status');
-    
+
     $stats = getQueueStats();
-    
+
     echo colorize("Queue Directory: ", 'cyan') . $stats['queue_dir'] . "\n";
     echo colorize("Queue Files: ", 'cyan') . $stats['queue_files'] . "\n";
     echo colorize("Lock Files: ", 'cyan') . $stats['lock_files'] . "\n";
     echo colorize("Total Size: ", 'cyan') . formatBytes($stats['total_size']) . "\n";
-    
+
     if ($stats['queue_files'] > 0) {
         printWarning("There are {$stats['queue_files']} pending messages in the queue");
     } else {
         printSuccess("Queue is empty");
     }
-    
+
     // Check if worker is running
-    $workerPid = getWorkerPid();
-    if ($workerPid) {
-        printSuccess("Worker is running (PID: $workerPid)");
+    $workerPids = getWorkerPids();
+    if (!empty($workerPids)) {
+        if (count($workerPids) == 1) {
+            printSuccess("Worker is running (PID: {$workerPids[0]})");
+        } else {
+            printWarning("Multiple workers running (PIDs: " . implode(', ', $workerPids) . ")");
+        }
     } else {
         printWarning("No worker process found");
     }
@@ -145,36 +153,47 @@ function statusQueue(): void
 function formatBytes(int $bytes): string
 {
     if ($bytes == 0) return '0 B';
-    
+
     $units = ['B', 'KB', 'MB', 'GB'];
     $unitIndex = 0;
-    
+
     while ($bytes >= 1024 && $unitIndex < count($units) - 1) {
         $bytes /= 1024;
         $unitIndex++;
     }
-    
+
     return round($bytes, 2) . ' ' . $units[$unitIndex];
+}
+
+function getWorkerPids(): array
+{
+    $workerPath = realpath(__DIR__ . '/worker');
+    $output = shell_exec("ps aux | grep 'php.*$workerPath' | grep -v grep | awk '{print \$2}'");
+    if (!$output) {
+        return [];
+    }
+    
+    return array_filter(array_map('intval', explode("\n", trim($output))));
 }
 
 function getWorkerPid(): ?int
 {
-    $output = shell_exec('pgrep -f "php.*bin/worker"');
-    return $output ? (int)trim($output) : null;
+    $pids = getWorkerPids();
+    return $pids ? $pids[0] : null;
 }
 
 function startWorker(bool $daemon = false): void
 {
     printHeader('Starting Worker');
-    
+
     $existingPid = getWorkerPid();
     if ($existingPid) {
         printWarning("Worker is already running (PID: $existingPid)");
         return;
     }
-    
+
     $workerScript = __DIR__ . '/worker';
-    
+
     if ($daemon) {
         $logFile = __DIR__ . '/../var/logs/worker.log';
         $cmd = "php $workerScript > $logFile 2>&1 & echo $!";
@@ -187,60 +206,82 @@ function startWorker(bool $daemon = false): void
     }
 }
 
-function stopWorker(): void
+function stopWorker(bool $force = false): void
 {
     printHeader('Stopping Worker');
-    
-    $pid = getWorkerPid();
-    if (!$pid) {
+
+    $pids = getWorkerPids();
+    if (empty($pids)) {
         printWarning('No worker process found');
         return;
     }
+
+    $signal = $force ? SIGKILL : SIGTERM;
+    $signalName = $force ? 'SIGKILL' : 'SIGTERM';
     
-    if (posix_kill($pid, SIGTERM)) {
-        printSuccess("Worker stopped (PID: $pid)");
-    } else {
-        printError("Failed to stop worker (PID: $pid)");
-        printInfo("Try: kill $pid");
+    if ($force) {
+        printWarning("Force stopping worker(s) with $signalName...");
+    }
+
+    $stopped = 0;
+    $failed = 0;
+
+    foreach ($pids as $pid) {
+        if (posix_kill($pid, $signal)) {
+            printSuccess("Worker stopped (PID: $pid)");
+            $stopped++;
+        } else {
+            printError("Failed to stop worker (PID: $pid)");
+            $failed++;
+        }
+    }
+
+    if ($failed > 0 && !$force) {
+        printInfo("Try force stop: php bin/queue stop --force");
+        printInfo("Or manual kill: kill -9 " . implode(' ', $pids));
+    }
+    
+    if ($stopped > 0) {
+        printInfo("Stopped $stopped worker process(es)");
     }
 }
 
 function restartWorker(bool $daemon = false): void
 {
     printHeader('Restarting Worker');
-    
+
     $pid = getWorkerPid();
     if ($pid) {
         printInfo("Stopping existing worker (PID: $pid)...");
         posix_kill($pid, SIGTERM);
         sleep(2); // Give it time to stop
     }
-    
+
     startWorker($daemon);
 }
 
 function processQueue(): void
 {
     printHeader('Processing Queue (One-time)');
-    
+
     $stats = getQueueStats();
     if ($stats['queue_files'] == 0) {
         printInfo('Queue is empty, nothing to process');
         return;
     }
-    
+
     printInfo("Processing {$stats['queue_files']} queued messages...");
-    
+
     $container = getContainer();
     $context = $container->get(Context::class);
     $handler = $container->get(SendEmailCommandHandler::class);
-    
+
     $queue = $context->createQueue('send-email');
     $consumer = $context->createConsumer($queue);
-    
+
     $processed = 0;
     $errors = 0;
-    
+
     while ($message = $consumer->receive(1000)) { // 1 second timeout
         try {
             $command = unserialize($message->getBody());
@@ -258,7 +299,7 @@ function processQueue(): void
             echo colorize("!", 'yellow');
         }
     }
-    
+
     echo "\n\n";
     printSuccess("Processed: $processed messages");
     if ($errors > 0) {
@@ -269,13 +310,13 @@ function processQueue(): void
 function showLogs(int $lines = 50): void
 {
     printHeader("Recent Logs (last $lines lines)");
-    
+
     $logFile = __DIR__ . '/../var/logs/app.log';
     if (!file_exists($logFile)) {
         printError('Log file not found: ' . $logFile);
         return;
     }
-    
+
     $cmd = "tail -n $lines " . escapeshellarg($logFile);
     passthru($cmd);
 }
@@ -283,7 +324,7 @@ function showLogs(int $lines = 50): void
 function showHelp(): void
 {
     $script = basename(__FILE__);
-    
+
     echo colorize("Aegis Mailer Queue Management Tool", 'bold') . "\n\n";
     echo colorize("Usage:", 'cyan') . " php bin/$script <command> [options]\n\n";
     echo colorize("Commands:", 'cyan') . "\n";
@@ -293,6 +334,7 @@ function showHelp(): void
     echo "  " . colorize("start", 'green') . "               Start worker in foreground\n";
     echo "  " . colorize("start --daemon", 'green') . "      Start worker as background daemon\n";
     echo "  " . colorize("stop", 'green') . "                Stop running worker\n";
+    echo "  " . colorize("stop --force", 'green') . "        Force stop worker with SIGKILL\n";
     echo "  " . colorize("restart", 'green') . "             Restart worker in foreground\n";
     echo "  " . colorize("restart --daemon", 'green') . "    Restart worker as background daemon\n";
     echo "  " . colorize("logs [lines]", 'green') . "        Show recent application logs (default: 50)\n";
@@ -312,6 +354,7 @@ if ($argc < 2) {
 
 $command = $argv[1];
 $daemon = in_array('--daemon', $argv) || in_array('-d', $argv);
+$force = in_array('--force', $argv) || in_array('-f', $argv);
 
 try {
     switch ($command) {
@@ -319,42 +362,42 @@ try {
         case 'stat':
             statusQueue();
             break;
-            
+
         case 'clear':
         case 'flush':
             clearQueue();
             break;
-            
+
         case 'process':
         case 'run':
             processQueue();
             break;
-            
+
         case 'start':
             startWorker($daemon);
             break;
-            
+
         case 'stop':
-            stopWorker();
+            stopWorker($force);
             break;
-            
+
         case 'restart':
         case 'reload':
             restartWorker($daemon);
             break;
-            
+
         case 'logs':
         case 'log':
             $lines = isset($argv[2]) ? (int)$argv[2] : 50;
             showLogs($lines);
             break;
-            
+
         case 'help':
         case '--help':
         case '-h':
             showHelp();
             break;
-            
+
         default:
             printError("Unknown command: $command");
             showHelp();
