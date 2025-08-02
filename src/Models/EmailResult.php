@@ -63,7 +63,7 @@ class EmailResult
         return $this->sentAt;
     }
 
-    public function addMetadata(string $key, $value): self
+    public function addMetadata(string $key, mixed $value): self
     {
         $this->metadata[$key] = $value;
 

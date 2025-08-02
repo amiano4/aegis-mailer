@@ -46,7 +46,7 @@
         "test-coverage": "phpunit --coverage-html coverage",
         "cs-fix": "php-cs-fixer fix",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
-        "stan": "phpstan analyse",
+        "stan": "phpstan analyse src tests public --level=5",
         "quality": [
             "@cs-check",
             "@stan",

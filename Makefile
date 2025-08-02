@@ -62,7 +62,7 @@ cs-fix: ## Fix code style issues
 
 stan: ## Run static analysis
 	@echo "${BLUE}Running static analysis...${NC}"
-	vendor/bin/phpstan analyse
+	vendor/bin/phpstan analyse src tests public --level=5
 
 quality: ## Run all quality checks
 	@echo "${BLUE}Running all quality checks...${NC}"

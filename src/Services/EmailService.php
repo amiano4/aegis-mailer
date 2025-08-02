@@ -237,7 +237,7 @@ class EmailService implements EmailServiceInterface
         $this->mailer->clearBCCs();
 
         // Set recipient
-        $this->mailer->addAddress($message->getTo(), $message->getToName());
+        $this->mailer->addAddress($message->getTo(), $message->getToName() ?? '');
 
         // Set subject and body
         $this->mailer->Subject = $message->getSubject();
@@ -265,7 +265,7 @@ class EmailService implements EmailServiceInterface
 
         // Set reply-to
         if ($message->getReplyTo()) {
-            $this->mailer->addReplyTo($message->getReplyTo(), $message->getReplyToName());
+            $this->mailer->addReplyTo($message->getReplyTo(), $message->getReplyToName() ?? '');
         }
 
         // Add attachments (if feature enabled)

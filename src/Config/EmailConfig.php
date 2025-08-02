@@ -258,7 +258,7 @@ class EmailConfig
         }
     }
 
-    public function get(string $key, $default = null)
+    public function get(string $key, mixed $default = null): mixed
     {
         $keys = explode('.', $key);
         $value = $this->config;
@@ -273,7 +273,7 @@ class EmailConfig
         return $value;
     }
 
-    public function set(string $key, $value): void
+    public function set(string $key, mixed $value): void
     {
         $keys = explode('.', $key);
         $config = &$this->config;

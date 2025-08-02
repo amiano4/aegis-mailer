@@ -80,7 +80,11 @@ function handleEmailSending(EmailService $emailService, EmailConfig $config): vo
 
     try {
         // Get JSON input
-        $input = json_decode(file_get_contents('php://input'), true);
+        $rawInput = file_get_contents('php://input');
+        if ($rawInput === false) {
+            throw new EmailException('Failed to read request body');
+        }
+        $input = json_decode($rawInput, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new EmailException('Invalid JSON input: ' . json_last_error_msg());
