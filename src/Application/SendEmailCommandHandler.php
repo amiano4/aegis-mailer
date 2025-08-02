@@ -6,6 +6,7 @@ namespace Aegis\Application;
 
 use Aegis\Domain\EmailMessage;
 use Aegis\Domain\EmailServiceInterface;
+use Interop\Queue\Message;
 
 final class SendEmailCommandHandler
 {
@@ -13,7 +14,7 @@ final class SendEmailCommandHandler
         private readonly EmailServiceInterface $emailService
     ) {}
 
-    public function handle(SendEmailCommand $command): void
+    public function handle(SendEmailCommand $command, ?string $messageId = null): void
     {
         $message = new EmailMessage(
             $command->to,
@@ -29,6 +30,6 @@ final class SendEmailCommandHandler
             $command->priority
         );
 
-        $this->emailService->send($message);
+        $this->emailService->send($message, $messageId);
     }
 }

@@ -6,5 +6,5 @@ namespace Aegis\Domain;
 
 interface EmailServiceInterface
 {
-    public function send(EmailMessage $message): EmailResult;
+    public function send(EmailMessage $message, ?string $messageId = null): EmailResult;
 }

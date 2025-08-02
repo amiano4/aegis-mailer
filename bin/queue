@@ -285,7 +285,7 @@ function processQueue(): void
     while ($message = $consumer->receive(1000)) { // 1 second timeout
         try {
             $command = unserialize($message->getBody());
-            $handler->handle($command);
+            $handler->handle($command, $message->getMessageId());
             $consumer->acknowledge($message);
             $processed++;
             echo colorize(".", 'green');

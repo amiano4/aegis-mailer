@@ -36,7 +36,7 @@ while (true) {
         try {
             $command = unserialize($message->getBody());
             echo "Processing message: " . $message->getMessageId() . " (to: {$command->to}, subject: {$command->subject})\n";
-            $handler->handle($command);
+            $handler->handle($command, $message->getMessageId());
             $consumer->acknowledge($message);
             echo "Message processed successfully: " . $message->getMessageId() . "\n";
         } catch (\InvalidArgumentException $e) {

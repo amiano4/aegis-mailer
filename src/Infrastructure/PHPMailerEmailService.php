@@ -23,7 +23,7 @@ final class PHPMailerEmailService implements EmailServiceInterface
         private readonly WebhookNotifier $webhookNotifier
     ) {}
 
-    public function send(EmailMessage $message): EmailResult
+    public function send(EmailMessage $message, ?string $messageId = null): EmailResult
     {
         try {
             $this->prepareMailer($message);
@@ -53,7 +53,9 @@ final class PHPMailerEmailService implements EmailServiceInterface
             $this->logger->info('Email sent successfully', $result->toArray());
 
             // Notify success via webhook
-            $this->webhookNotifier->notifySuccess($message->getMessageId());
+            if ($messageId) {
+                $this->webhookNotifier->notifySuccess($messageId);
+            }
 
             return $result;
         } catch (\Exception $e) {
@@ -83,8 +85,10 @@ final class PHPMailerEmailService implements EmailServiceInterface
             ]);
 
             // Record failure and notify via webhook
-            $this->deliveryTracker->recordFailure($message->getMessageId(), $e->getMessage(), 1);
-            $this->webhookNotifier->notifyFailure($message->getMessageId(), $e->getMessage(), 1);
+            if ($messageId) {
+                $this->deliveryTracker->recordFailure($messageId, $e->getMessage(), 1);
+                $this->webhookNotifier->notifyFailure($messageId, $e->getMessage(), 1);
+            }
 
             return new EmailResult(false, null, $e->getMessage());
         }
