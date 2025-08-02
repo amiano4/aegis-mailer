@@ -46,16 +46,21 @@
             "Aegis\\": "src/"
         }
     },
+    "config": {
+        "process-timeout": 0
+    },
     "bin": [
         "bin/queue"
     ],
     "scripts": {
-        "start": "php scripts/start-server.php",
+        "start": "php scripts/start-dev.php",
+        "start-server": "php scripts/start-server.php", 
         "queue": "php bin/queue",
         "worker": "php bin/worker"
     },
     "scripts-descriptions": {
-        "start": "Start development server on available port (8000+)",
+        "start": "Start development environment (server + queue worker)",
+        "start-server": "Start development server only",
         "queue": "Queue management utility",
         "worker": "Start email worker process"
     }

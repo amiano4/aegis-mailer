@@ -87,6 +87,11 @@ return function (ContainerBuilder $containerBuilder) {
             $mailer->Password = $_ENV['SMTP_PASSWORD'] ?? '';
             $mailer->SMTPSecure = $_ENV['SMTP_ENCRYPTION'] ?? PHPMailer::ENCRYPTION_STARTTLS;
             $mailer->setFrom($_ENV['MAIL_FROM_ADDRESS'] ?? 'noreply@example.com', $_ENV['MAIL_FROM_NAME'] ?? 'Aegis Mailer');
+            
+            // UTF-8 encoding settings
+            $mailer->CharSet = 'UTF-8';
+            $mailer->Encoding = 'base64'; // Better for UTF-8 content
+            $mailer->ContentType = 'text/html; charset=UTF-8';
 
             return $mailer;
         },
@@ -94,57 +99,34 @@ return function (ContainerBuilder $containerBuilder) {
         HTMLPurifier::class => function () {
             $config = HTMLPurifier_Config::createDefault();
             
-            // Essential UTF-8 configuration
+            // Basic email-safe configuration
             $config->set('Core.Encoding', 'UTF-8');
             $config->set('HTML.Doctype', 'HTML 4.01 Transitional');
             
-            // Create cache directory if it doesn't exist
+            // Create cache directory
             $cacheDir = __DIR__ . '/../var/cache/htmlpurifier';
             if (!is_dir($cacheDir)) {
                 mkdir($cacheDir, 0755, true);
             }
             $config->set('Cache.SerializerPath', $cacheDir);
             
-            // Email-friendly HTML elements and attributes
-            $config->set('HTML.Allowed', 
-                'h1,h2,h3,h4,h5,h6,p,br,strong,b,em,i,u,strike,del,ins,' .
-                'ul,ol,li,blockquote,pre,code,' .
-                'a[href|title],img[src|alt|width|height|title],' .
-                'table,thead,tbody,tfoot,tr,td[colspan|rowspan],th[colspan|rowspan],' .
-                'div[style],span[style],font[color|size|face]'
-            );
+            // Trusted mode for React Email compatibility
+            $config->set('HTML.Trusted', true);
+            $config->set('CSS.Trusted', true);
             
-            // Allow email-safe CSS properties
-            $config->set('CSS.AllowedProperties', 
-                'font,font-family,font-size,font-weight,font-style,font-variant,' .
-                'color,background,background-color,background-image,' .
-                'margin,margin-top,margin-right,margin-bottom,margin-left,' .
-                'padding,padding-top,padding-right,padding-bottom,padding-left,' .
-                'border,border-top,border-right,border-bottom,border-left,' .
-                'border-color,border-style,border-width,border-radius,' .
-                'text-align,text-decoration,text-indent,text-transform,' .
-                'line-height,letter-spacing,word-spacing,' .
-                'width,height,max-width,max-height,min-width,min-height,' .
-                'display,visibility,float,clear,position,top,right,bottom,left,' .
-                'vertical-align,white-space'
-            );
+            // Security filtering
+            $config->set('HTML.ForbiddenElements', 'script,object,embed,applet,form');
+            $config->set('HTML.ForbiddenAttributes', 'onclick,onload,onerror,onmouseover,onfocus,onblur,onkeyup,onkeydown,onkeypress,onmouseup,onmousedown,srcset,sizes');
             
-            // Unicode and entity handling
-            $config->set('Core.EscapeInvalidTags', true);
-            $config->set('Core.EscapeInvalidChildren', true);
+            // Email-specific settings
             $config->set('Core.ConvertDocumentToFragment', true);
+            $config->set('Output.TidyFormat', false);
+            $config->set('Core.NormalizeNewlines', false);
+            $config->set('HTML.TidyLevel', 'none');
+            $config->set('AutoFormat.AutoParagraph', false);
+            $config->set('AutoFormat.Linkify', false);
+            $config->set('AutoFormat.RemoveEmpty', false);
             $config->set('Core.CollectErrors', false);
-            
-            // Allow some HTML5 elements commonly used in emails
-            $config->set('HTML.DefinitionID', 'email-html-def');
-            $config->set('HTML.DefinitionRev', 1);
-            if ($def = $config->maybeGetRawHTMLDefinition()) {
-                // Add HTML5 elements
-                $def->addElement('section', 'Block', 'Flow', 'Common');
-                $def->addElement('article', 'Block', 'Flow', 'Common');
-                $def->addElement('header', 'Block', 'Flow', 'Common');
-                $def->addElement('footer', 'Block', 'Flow', 'Common');
-            }
             
             return new HTMLPurifier($config);
         },
