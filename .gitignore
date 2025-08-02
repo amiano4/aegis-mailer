@@ -1,0 +1,87 @@
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Composer dependencies
+/vendor/
+
+# Runtime files
+/var/logs/*
+/var/cache/*
+/var/queue/*
+/var/attachments/*
+!/var/logs/.gitkeep
+!/var/cache/.gitkeep
+!/var/queue/.gitkeep
+!/var/attachments/.gitkeep
+
+# Server logs
+server.log
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.phpunit.result.cache
+
+# Docker volumes
+docker-compose.override.yml
+
+# Lock files (keep composer.lock for dependency tracking)
+# package-lock.json
+# yarn.lock
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# PHP specific
+*.php~
+.php_cs.cache
+
+# Development tools
+phpunit.xml
+phpcs.xml
+phpmd.xml
+
+# Runtime directories
+/runtime/
+/tmp/
+
+# Test output
+/coverage/
+/tests/output/
+
+# Configuration overrides
+config/local.php
+config/development.php
+
+# Queue lock files
+*.lock
+
+# HTMLPurifier cache
+/var/cache/htmlpurifier/
+
+# claude
+CLAUDE.md
+
+*.sh

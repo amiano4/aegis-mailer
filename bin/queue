@@ -1,0 +1,366 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Aegis\Application\SendEmailCommandHandler;
+use DI\ContainerBuilder;
+use Interop\Queue\Context;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Load environment variables
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+// ANSI color codes for pretty output
+const COLORS = [
+    'reset' => "\033[0m",
+    'red' => "\033[31m",
+    'green' => "\033[32m",
+    'yellow' => "\033[33m",
+    'blue' => "\033[34m",
+    'magenta' => "\033[35m",
+    'cyan' => "\033[36m",
+    'white' => "\033[37m",
+    'bold' => "\033[1m",
+];
+
+function colorize(string $text, string $color): string
+{
+    return COLORS[$color] . $text . COLORS['reset'];
+}
+
+function printHeader(string $title): void
+{
+    echo "\n" . colorize("=== $title ===", 'bold') . "\n\n";
+}
+
+function printSuccess(string $message): void
+{
+    echo colorize("✓ $message", 'green') . "\n";
+}
+
+function printError(string $message): void
+{
+    echo colorize("✗ $message", 'red') . "\n";
+}
+
+function printInfo(string $message): void
+{
+    echo colorize("ℹ $message", 'blue') . "\n";
+}
+
+function printWarning(string $message): void
+{
+    echo colorize("⚠ $message", 'yellow') . "\n";
+}
+
+// Initialize DI container
+function getContainer(): \DI\Container
+{
+    $containerBuilder = new ContainerBuilder();
+    $dependencies = require __DIR__ . '/../config/dependencies.php';
+    $dependencies($containerBuilder);
+    return $containerBuilder->build();
+}
+
+// Queue management functions
+function getQueueStats(): array
+{
+    $queueDir = __DIR__ . '/../var/queue';
+    $lockFiles = glob($queueDir . '/*.lock');
+    $queueFiles = glob($queueDir . '/send-email*');
+    
+    // Filter out lock files from queue files
+    $queueFiles = array_filter($queueFiles, fn($file) => !str_ends_with($file, '.lock'));
+    
+    $totalSize = 0;
+    foreach ($queueFiles as $file) {
+        if (file_exists($file)) {
+            $totalSize += filesize($file);
+        }
+    }
+    
+    return [
+        'queue_files' => count($queueFiles),
+        'lock_files' => count($lockFiles),
+        'total_size' => $totalSize,
+        'queue_dir' => $queueDir
+    ];
+}
+
+function clearQueue(): void
+{
+    printHeader('Clearing Queue');
+    
+    $queueDir = __DIR__ . '/../var/queue';
+    $files = glob($queueDir . '/*');
+    
+    if (empty($files)) {
+        printInfo('Queue is already empty');
+        return;
+    }
+    
+    $deleted = 0;
+    foreach ($files as $file) {
+        if (is_file($file)) {
+            if (unlink($file)) {
+                $deleted++;
+            } else {
+                printError("Failed to delete: " . basename($file));
+            }
+        }
+    }
+    
+    printSuccess("Cleared $deleted files from queue");
+}
+
+function statusQueue(): void
+{
+    printHeader('Queue Status');
+    
+    $stats = getQueueStats();
+    
+    echo colorize("Queue Directory: ", 'cyan') . $stats['queue_dir'] . "\n";
+    echo colorize("Queue Files: ", 'cyan') . $stats['queue_files'] . "\n";
+    echo colorize("Lock Files: ", 'cyan') . $stats['lock_files'] . "\n";
+    echo colorize("Total Size: ", 'cyan') . formatBytes($stats['total_size']) . "\n";
+    
+    if ($stats['queue_files'] > 0) {
+        printWarning("There are {$stats['queue_files']} pending messages in the queue");
+    } else {
+        printSuccess("Queue is empty");
+    }
+    
+    // Check if worker is running
+    $workerPid = getWorkerPid();
+    if ($workerPid) {
+        printSuccess("Worker is running (PID: $workerPid)");
+    } else {
+        printWarning("No worker process found");
+    }
+}
+
+function formatBytes(int $bytes): string
+{
+    if ($bytes == 0) return '0 B';
+    
+    $units = ['B', 'KB', 'MB', 'GB'];
+    $unitIndex = 0;
+    
+    while ($bytes >= 1024 && $unitIndex < count($units) - 1) {
+        $bytes /= 1024;
+        $unitIndex++;
+    }
+    
+    return round($bytes, 2) . ' ' . $units[$unitIndex];
+}
+
+function getWorkerPid(): ?int
+{
+    $output = shell_exec('pgrep -f "php.*bin/worker"');
+    return $output ? (int)trim($output) : null;
+}
+
+function startWorker(bool $daemon = false): void
+{
+    printHeader('Starting Worker');
+    
+    $existingPid = getWorkerPid();
+    if ($existingPid) {
+        printWarning("Worker is already running (PID: $existingPid)");
+        return;
+    }
+    
+    $workerScript = __DIR__ . '/worker';
+    
+    if ($daemon) {
+        $logFile = __DIR__ . '/../var/logs/worker.log';
+        $cmd = "php $workerScript > $logFile 2>&1 & echo $!";
+        $pid = (int)shell_exec($cmd);
+        printSuccess("Worker started as daemon (PID: $pid)");
+        printInfo("Logs: $logFile");
+    } else {
+        printInfo("Starting worker in foreground mode (Ctrl+C to stop)...");
+        passthru("php $workerScript");
+    }
+}
+
+function stopWorker(): void
+{
+    printHeader('Stopping Worker');
+    
+    $pid = getWorkerPid();
+    if (!$pid) {
+        printWarning('No worker process found');
+        return;
+    }
+    
+    if (posix_kill($pid, SIGTERM)) {
+        printSuccess("Worker stopped (PID: $pid)");
+    } else {
+        printError("Failed to stop worker (PID: $pid)");
+        printInfo("Try: kill $pid");
+    }
+}
+
+function restartWorker(bool $daemon = false): void
+{
+    printHeader('Restarting Worker');
+    
+    $pid = getWorkerPid();
+    if ($pid) {
+        printInfo("Stopping existing worker (PID: $pid)...");
+        posix_kill($pid, SIGTERM);
+        sleep(2); // Give it time to stop
+    }
+    
+    startWorker($daemon);
+}
+
+function processQueue(): void
+{
+    printHeader('Processing Queue (One-time)');
+    
+    $stats = getQueueStats();
+    if ($stats['queue_files'] == 0) {
+        printInfo('Queue is empty, nothing to process');
+        return;
+    }
+    
+    printInfo("Processing {$stats['queue_files']} queued messages...");
+    
+    $container = getContainer();
+    $context = $container->get(Context::class);
+    $handler = $container->get(SendEmailCommandHandler::class);
+    
+    $queue = $context->createQueue('send-email');
+    $consumer = $context->createConsumer($queue);
+    
+    $processed = 0;
+    $errors = 0;
+    
+    while ($message = $consumer->receive(1000)) { // 1 second timeout
+        try {
+            $command = unserialize($message->getBody());
+            $handler->handle($command);
+            $consumer->acknowledge($message);
+            $processed++;
+            echo colorize(".", 'green');
+        } catch (\InvalidArgumentException $e) {
+            $consumer->acknowledge($message); // Discard invalid messages
+            $errors++;
+            echo colorize("x", 'red');
+        } catch (\Throwable $e) {
+            $consumer->reject($message, false); // Don't requeue
+            $errors++;
+            echo colorize("!", 'yellow');
+        }
+    }
+    
+    echo "\n\n";
+    printSuccess("Processed: $processed messages");
+    if ($errors > 0) {
+        printWarning("Errors: $errors messages");
+    }
+}
+
+function showLogs(int $lines = 50): void
+{
+    printHeader("Recent Logs (last $lines lines)");
+    
+    $logFile = __DIR__ . '/../var/logs/app.log';
+    if (!file_exists($logFile)) {
+        printError('Log file not found: ' . $logFile);
+        return;
+    }
+    
+    $cmd = "tail -n $lines " . escapeshellarg($logFile);
+    passthru($cmd);
+}
+
+function showHelp(): void
+{
+    $script = basename(__FILE__);
+    
+    echo colorize("Aegis Mailer Queue Management Tool", 'bold') . "\n\n";
+    echo colorize("Usage:", 'cyan') . " php bin/$script <command> [options]\n\n";
+    echo colorize("Commands:", 'cyan') . "\n";
+    echo "  " . colorize("status", 'green') . "              Show queue status and worker info\n";
+    echo "  " . colorize("clear", 'green') . "               Clear all messages from queue\n";
+    echo "  " . colorize("process", 'green') . "             Process all queued messages once\n";
+    echo "  " . colorize("start", 'green') . "               Start worker in foreground\n";
+    echo "  " . colorize("start --daemon", 'green') . "      Start worker as background daemon\n";
+    echo "  " . colorize("stop", 'green') . "                Stop running worker\n";
+    echo "  " . colorize("restart", 'green') . "             Restart worker in foreground\n";
+    echo "  " . colorize("restart --daemon", 'green') . "    Restart worker as background daemon\n";
+    echo "  " . colorize("logs [lines]", 'green') . "        Show recent application logs (default: 50)\n";
+    echo "  " . colorize("help", 'green') . "                Show this help message\n\n";
+    echo colorize("Examples:", 'cyan') . "\n";
+    echo "  php bin/$script status\n";
+    echo "  php bin/$script start --daemon\n";
+    echo "  php bin/$script logs 100\n";
+    echo "  php bin/$script clear\n\n";
+}
+
+// Main command handler
+if ($argc < 2) {
+    showHelp();
+    exit(1);
+}
+
+$command = $argv[1];
+$daemon = in_array('--daemon', $argv) || in_array('-d', $argv);
+
+try {
+    switch ($command) {
+        case 'status':
+        case 'stat':
+            statusQueue();
+            break;
+            
+        case 'clear':
+        case 'flush':
+            clearQueue();
+            break;
+            
+        case 'process':
+        case 'run':
+            processQueue();
+            break;
+            
+        case 'start':
+            startWorker($daemon);
+            break;
+            
+        case 'stop':
+            stopWorker();
+            break;
+            
+        case 'restart':
+        case 'reload':
+            restartWorker($daemon);
+            break;
+            
+        case 'logs':
+        case 'log':
+            $lines = isset($argv[2]) ? (int)$argv[2] : 50;
+            showLogs($lines);
+            break;
+            
+        case 'help':
+        case '--help':
+        case '-h':
+            showHelp();
+            break;
+            
+        default:
+            printError("Unknown command: $command");
+            showHelp();
+            exit(1);
+    }
+} catch (\Throwable $e) {
+    printError("Error: " . $e->getMessage());
+    exit(1);
+}

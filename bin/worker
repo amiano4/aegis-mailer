@@ -1,0 +1,53 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Aegis\Application\SendEmailCommandHandler;
+use DI\ContainerBuilder;
+use Interop\Queue\Context;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Load environment variables
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+// Instantiate PHP-DI ContainerBuilder
+$containerBuilder = new ContainerBuilder();
+
+// Set up dependencies
+$dependencies = require __DIR__ . '/../config/dependencies.php';
+$dependencies($containerBuilder);
+
+// Build PHP-DI Container instance
+$container = $containerBuilder->build();
+
+$context = $container->get(Context::class);
+$handler = $container->get(SendEmailCommandHandler::class);
+
+$queue = $context->createQueue('send-email');
+$consumer = $context->createConsumer($queue);
+
+echo "Listening for messages...\n";
+
+while (true) {
+    if ($message = $consumer->receive(1000)) {
+        try {
+            $command = unserialize($message->getBody());
+            echo "Processing message: " . $message->getMessageId() . " (to: {$command->to}, subject: {$command->subject})\n";
+            $handler->handle($command);
+            $consumer->acknowledge($message);
+            echo "Message processed successfully: " . $message->getMessageId() . "\n";
+        } catch (\InvalidArgumentException $e) {
+            // Don't requeue invalid messages - they will always fail
+            echo "Invalid message, discarding: " . $e->getMessage() . " (Message ID: " . $message->getMessageId() . ")\n";
+            $consumer->acknowledge($message);
+        } catch (\Throwable $e) {
+            echo "Error processing message " . $message->getMessageId() . ": " . $e->getMessage() . "\n";
+            echo "Exception class: " . get_class($e) . "\n";
+            echo "File: " . $e->getFile() . ":" . $e->getLine() . "\n";
+            $consumer->reject($message, false); // Don't requeue to avoid infinite loops
+        }
+    }
+}

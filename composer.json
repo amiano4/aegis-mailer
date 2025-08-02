@@ -1,0 +1,21 @@
+{
+    "autoload": {
+        "psr-4": {
+            "Aegis\\": "src/"
+        }
+    },
+    "require": {
+        "slim/slim": "^4.14",
+        "slim/psr7": "^1.7",
+        "php-di/php-di": "^7.0",
+        "php-di/slim-bridge": "^3.4",
+        "enqueue/enqueue": "^0.10.26",
+        "enqueue/fs": "^0.10.26",
+        "vlucas/phpdotenv": "^5.6",
+        "monolog/monolog": "^3.9",
+        "ezyang/htmlpurifier": "^4.18",
+        "phpmailer/phpmailer": "^6.10",
+        "symfony/rate-limiter": "^7.3",
+        "symfony/cache": "^7.3"
+    }
+}
